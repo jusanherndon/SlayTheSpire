@@ -2,7 +2,6 @@ import json
 import os
 from collections import defaultdict
 from pathlib import Path
-from tkinter.constants import CHAR
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -18,7 +17,7 @@ import plotly.express as px
 
 # Notes: sts 2 game id in steam is 2868840
 
-folder_path = r"/home/justin/.local/share/SlayTheSpire2/steam/76561198255113960/profile1/saves/history"
+folder_path = r"INSERT YOUR PATH HERE"
 folder_path = Path(folder_path).expanduser()  # expands ~
 
 
@@ -53,7 +52,6 @@ def extract_run_data(file_path):
         data = json.load(f)
 
     players = data.get("players", [])
-    character = clean_character_name(players[0].get("character", ""))
     if not players:
         return set(), False, None, None, None
 
