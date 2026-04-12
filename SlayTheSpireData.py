@@ -1,12 +1,13 @@
 import json
 import os
-import pandas as pd
-import matplotlib.pyplot as plt
 from collections import defaultdict
-import plotly.express as px
 from pathlib import Path
 
-#Your path might looks something like
+import matplotlib.pyplot as plt
+import pandas as pd
+import plotly.express as px
+
+# Your path might looks something like
 #   - For Windows: C:\Users\YOUR_NAME\AppData\Roaming\SlayTheSpire2\steam\STRING OF NUMBERS\profile1\saves\history
 #   - For Mac: ~/Library/Application Support/SlayTheSpire2/
 #   - Linux:
@@ -17,7 +18,8 @@ from pathlib import Path
 # Notes: sts 2 game id in steam is 2868840
 
 folder_path = r"INSERT YOUR PATH HERE"
-folder_path = Path(folder_path).expanduser() # expands ~
+folder_path = Path(folder_path).expanduser()  # expands ~
+
 
 def clean_relic_name(raw_name):
     return raw_name.replace("RELIC.", "").replace("_", " ").title()
@@ -27,8 +29,26 @@ def clean_character_name(raw_name):
     return raw_name.replace("CHARACTER.", "").title()
 
 
+def clean_killed_by_event(raw_name):
+    if "EVENT" in raw_name:
+        return raw_name.replace("EVENT.", "").title()
+    else:
+        return raw_name.replace("NONE.", "").title()
+
+
+def clean_card_name(raw_name):
+    return raw_name.replace("CARD.", "").replace("_", " ").title()
+
+
+def clean_encounter(raw_name):
+    if "ENCOUNTER" in raw_name:
+        return raw_name.replace("ENCOUNTER.", "").title()
+    else:
+        return raw_name.replace("NONE.", "").title()
+
+
 def extract_run_data(file_path):
-    with open(file_path, 'r') as f:
+    with open(file_path, "r") as f:
         data = json.load(f)
 
     players = data.get("players", [])
@@ -44,17 +64,24 @@ def extract_run_data(file_path):
     win = data.get("win", False)
     game_build = data.get("build_id", None)
     ascension = data.get("ascension", None)
-    killed_by_event = data.get("killed_by_event", None)
-    killed_by_encounter = data.get("killed_by_encounter", None)
+    killed_by_event = clean_killed_by_event(data.get("killed_by_event", ""))
+    killed_by_encounter = clean_encounter(data.get("killed_by_encounter", ""))
     character = clean_character_name(players[0].get("character", ""))
     run_time_seconds = data.get("run_time", 0)
     run_time_minutes = round(run_time_seconds / 60, 2)
     seed = data.get("seed", None)
 
-
-    return relics, win, ascension, character, run_time_minutes, game_build, killed_by_event,  killed_by_encounter, seed
-
-    #
+    return (
+        relics,
+        win,
+        ascension,
+        character,
+        run_time_minutes,
+        game_build,
+        killed_by_event,
+        killed_by_encounter,
+        seed,
+    )
 
 
 def build_dataframe(folder_path):
@@ -63,10 +90,19 @@ def build_dataframe(folder_path):
 
     # First pass: collect runs + all relics
     for filename in os.listdir(folder_path):
-
         file_path = os.path.join(folder_path, filename)
 
-        relics, win, ascension, character, run_time_minutes, game_build, killed_by_event,  killed_by_encounter, seed = extract_run_data(file_path)
+        (
+            relics,
+            win,
+            ascension,
+            character,
+            run_time_minutes,
+            game_build,
+            killed_by_event,
+            killed_by_encounter,
+            seed,
+        ) = extract_run_data(file_path)
 
         run_data = {
             "Run": filename,
@@ -78,7 +114,7 @@ def build_dataframe(folder_path):
             "game_build": game_build,
             "killed_by_event": killed_by_event,
             "killed_by_encounter": killed_by_encounter,
-            "seed": seed
+            "seed": seed,
         }
 
         all_runs.append(run_data)
@@ -98,17 +134,17 @@ def build_dataframe(folder_path):
             "killed_by_event": run["killed_by_event"],
             "killed_by_encounter": run["killed_by_encounter"],
             "game_build": run["game_build"],
-            "seed" : run["seed"]
+            "seed": run["seed"],
         }
 
         for relic in all_relics:
             row[relic] = 1 if relic in run["relics"] else 0
-
         rows.append(row)
 
     df = pd.DataFrame(rows)
 
     return df
+
 
 # --- LOAD DATA ---
 df = build_dataframe(folder_path)
@@ -116,7 +152,17 @@ df = build_dataframe(folder_path)
 df.to_csv("raw_data.csv", index=False)
 
 # --- IDENTIFY RELIC COLUMNS ---
-meta_cols = ["Run", "Character", "Ascension", "Run Time (min)", "Win", "game_build", "killed_by_event", "killed_by_encounter", "seed"]
+meta_cols = [
+    "Run",
+    "Character",
+    "Ascension",
+    "Run Time (min)",
+    "Win",
+    "killed_by_event",
+    "killed_by_encounter",
+    "game_build",
+    "seed",
+]
 relic_cols = [col for col in df.columns if col not in meta_cols]
 
 # --- BUILD res_df (winrate + count per relic) ---
@@ -128,16 +174,20 @@ for relic in relic_cols:
 
     if count > 0:
         winrate = subset["Win"].mean()
-        results.append({
-            "Relic": relic,
-            "Winrate": winrate,
-            "Count": count,
-        })
+        results.append(
+            {
+                "Relic": relic,
+                "Winrate": winrate,
+                "Count": count,
+            }
+        )
 
 res_df = pd.DataFrame(results)
 
 # --- SORT (optional, for inspection) ---
 res_df = res_df.sort_values(by="Winrate", ascending=False)
+
+res_df.to_csv("relic.csv", index=False)
 
 # --- PARAMETERS ---
 min_count = 5  # only consider relics with enough data
@@ -149,29 +199,21 @@ filtered = res_df[res_df["Count"] >= min_count].copy()
 overall_winrate = df["Win"].mean()
 
 
-powerful_relics = filtered[
-    filtered["Winrate"] > overall_winrate
-].copy()
+powerful_relics = filtered[filtered["Winrate"] > overall_winrate].copy()
 
 # Sort: best winrate first, then most common (for stability)
 powerful_relics = powerful_relics.sort_values(
-    by=["Winrate", "Count"],
-    ascending=[False, False]
+    by=["Winrate", "Count"], ascending=[False, False]
 )
 
 print("\nTop Powerful Relics:\n")
 print(powerful_relics.head(20))
 
 # --- IDENTIFY TRAPS ---
-traps = filtered[
-    filtered["Winrate"] < overall_winrate
-]
+traps = filtered[filtered["Winrate"] < overall_winrate]
 
 # Sort: worst winrate first, then most common
-traps = traps.sort_values(
-    by=["Winrate", "Count"],
-    ascending=[True, False]
-)
+traps = traps.sort_values(by=["Winrate", "Count"], ascending=[True, False])
 
 # --- PRINT RESULTS ---
 print(f"\nOverall Winrate: {overall_winrate:.2f}\n")
@@ -194,11 +236,11 @@ plt.gca().invert_yaxis()
 
 # Card Pick Rates
 
+
 # ================================
 # Helpers
 # ================================
-def clean_card_name(raw_name):
-    return raw_name.replace("CARD.", "").replace("_", " ").title()
+
 
 # ================================
 # Storage
@@ -207,18 +249,17 @@ card_offered_counts = defaultdict(int)
 card_picked_counts = defaultdict(int)
 card_win_counts = defaultdict(int)  # NEW
 
+
 # ================================
 # Extract card choices (per run)
 # ================================
 def extract_card_choices(obj, run_win, in_shop=False):
     if isinstance(obj, dict):
-
         # Check if THIS node is a shop
         current_in_shop = in_shop or (obj.get("map_point_type") == "shop")
 
         for key, value in obj.items():
             if key == "card_choices":
-
                 # 🚫 Skip card choices if we're in a shop
                 if current_in_shop:
                     continue
@@ -244,11 +285,12 @@ def extract_card_choices(obj, run_win, in_shop=False):
     elif isinstance(obj, list):
         for item in obj:
             extract_card_choices(item, run_win, in_shop)
+
+
 # ================================
 # Iterate files
 # ================================
 for filename in os.listdir(folder_path):
-
     file_path = os.path.join(folder_path, filename)
 
     with open(file_path, "r") as f:
@@ -273,16 +315,22 @@ for card in all_cards:
     pick_rate = picked / offered if offered > 0 else 0
     win_rate = wins / picked if picked > 0 else 0  # NEW
 
-    card_rows.append({
-        "card_name": card,
-        "times_offered": offered,
-        "times_picked": picked,
-        "pick_rate": pick_rate,
-        "wins_when_picked": wins,
-        "win_rate_when_picked": win_rate
-    })
+    card_rows.append(
+        {
+            "card_name": card,
+            "times_offered": offered,
+            "times_picked": picked,
+            "pick_rate": pick_rate,
+            "wins_when_picked": wins,
+            "win_rate_when_picked": win_rate,
+        }
+    )
 
 cards_df = pd.DataFrame(card_rows)
+
+cards_df = cards_df.sort_values(by="pick_rate", ascending=False)
+
+cards_df.to_csv("deck.csv", index=False)
 
 # ================================
 # Filter to cards seen at least 5 times
@@ -290,8 +338,7 @@ cards_df = pd.DataFrame(card_rows)
 filtered_cards = cards_df[cards_df["times_offered"] >= 5].copy()
 
 filtered_cards = filtered_cards.sort_values(
-    by=["pick_rate", "times_offered"],
-    ascending=[True, False]
+    by=["pick_rate", "times_offered"], ascending=[True, False]
 )
 
 # Safety check
@@ -301,9 +348,7 @@ else:
     # ================================
     # Most picked cards
     # ================================
-    most_picked = filtered_cards.sort_values(
-        by="pick_rate", ascending=False
-    ).head(10)
+    most_picked = filtered_cards.sort_values(by="pick_rate", ascending=False).head(10)
 
     print("\n=== Most Picked Cards (min 5 offers) ===")
     print(most_picked)
@@ -311,9 +356,7 @@ else:
     # ================================
     # Least picked cards
     # ================================
-    least_picked = filtered_cards.sort_values(
-        by="pick_rate", ascending=True
-    ).head(10)
+    least_picked = filtered_cards.sort_values(by="pick_rate", ascending=True).head(10)
 
     print("\n=== Least Picked Cards (min 5 offers) ===")
     print(least_picked)
@@ -323,8 +366,7 @@ else:
 # Filter data
 # ================================
 plot_df = cards_df[
-    (cards_df["times_picked"] > 0) &
-    (cards_df["times_offered"] >= 5)
+    (cards_df["times_picked"] > 0) & (cards_df["times_offered"] >= 5)
 ].copy()
 
 # Optional: scale marker size so it looks nicer
@@ -337,21 +379,18 @@ fig = px.scatter(
     plot_df,
     x="pick_rate",
     y="win_rate_when_picked",
-    hover_name="card_name",   # <-- shows card name on hover
+    hover_name="card_name",  # <-- shows card name on hover
     hover_data={
         "times_offered": True,
         "times_picked": True,
         "pick_rate": ":.2f",
-        "win_rate_when_picked": ":.2f"
+        "win_rate_when_picked": ":.2f",
     },
     title="Card Pick Rate vs Win Rate",
 )
 
 # Improve layout a bit
-fig.update_layout(
-    xaxis_title="Pick Rate",
-    yaxis_title="Win Rate When Picked"
-)
+fig.update_layout(xaxis_title="Pick Rate", yaxis_title="Win Rate When Picked")
 
 fig.show()
 plt.show()
