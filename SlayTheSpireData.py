@@ -2,6 +2,7 @@ import json
 import os
 from collections import defaultdict
 from pathlib import Path
+from tkinter.constants import CHAR
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -17,7 +18,7 @@ import plotly.express as px
 
 # Notes: sts 2 game id in steam is 2868840
 
-folder_path = r"INSERT YOUR PATH HERE"
+folder_path = r"/home/justin/.local/share/SlayTheSpire2/steam/76561198255113960/profile1/saves/history"
 folder_path = Path(folder_path).expanduser()  # expands ~
 
 
@@ -52,6 +53,7 @@ def extract_run_data(file_path):
         data = json.load(f)
 
     players = data.get("players", [])
+    character = clean_character_name(players[0].get("character", ""))
     if not players:
         return set(), False, None, None, None
 
@@ -248,12 +250,13 @@ plt.gca().invert_yaxis()
 card_offered_counts = defaultdict(int)
 card_picked_counts = defaultdict(int)
 card_win_counts = defaultdict(int)  # NEW
+card_character = {}
 
 
 # ================================
 # Extract card choices (per run)
 # ================================
-def extract_card_choices(obj, run_win, in_shop=False):
+def extract_card_choices(obj, run_win, character_name, in_shop=False):
     if isinstance(obj, dict):
         # Check if THIS node is a shop
         current_in_shop = in_shop or (obj.get("map_point_type") == "shop")
@@ -266,6 +269,8 @@ def extract_card_choices(obj, run_win, in_shop=False):
 
                 for choice in value:
                     card_name = clean_card_name(choice["card"]["id"])
+
+                    card_character.update({card_name: f"{character}"})
 
                     # Count offered
                     card_offered_counts[card_name] += 1
@@ -297,9 +302,11 @@ for filename in os.listdir(folder_path):
         data = json.load(f)
 
     run_win = data.get("win", False)
+    players = data.get("players", [])
+    character = clean_character_name(players[0].get("character", ""))
 
     # Extract card data WITH run result
-    extract_card_choices(data, run_win)
+    extract_card_choices(data, run_win, character)
 
 # ================================
 # Build card DataFrame
@@ -307,6 +314,12 @@ for filename in os.listdir(folder_path):
 all_cards = sorted(card_offered_counts.keys())
 
 card_rows = []
+card_rows_Silent = []
+card_rows_Regent = []
+card_rows_Necrobinder = []
+card_rows_Ironclad = []
+card_rows_Defect = []
+
 for card in all_cards:
     offered = card_offered_counts[card]
     picked = card_picked_counts[card]
@@ -326,10 +339,94 @@ for card in all_cards:
         }
     )
 
+    if "Silent" in card_character[card]:
+        card_rows_Silent.append(
+            {
+                "card_name": card,
+                "times_offered": offered,
+                "times_picked": picked,
+                "pick_rate": pick_rate,
+                "wins_when_picked": wins,
+                "win_rate_when_picked": win_rate,
+            }
+        )
+
+    if "Regent" in card_character[card]:
+        card_rows_Regent.append(
+            {
+                "card_name": card,
+                "times_offered": offered,
+                "times_picked": picked,
+                "pick_rate": pick_rate,
+                "wins_when_picked": wins,
+                "win_rate_when_picked": win_rate,
+            }
+        )
+
+    if "Necrobinder" in card_character[card]:
+        card_rows_Necrobinder.append(
+            {
+                "card_name": card,
+                "times_offered": offered,
+                "times_picked": picked,
+                "pick_rate": pick_rate,
+                "wins_when_picked": wins,
+                "win_rate_when_picked": win_rate,
+            }
+        )
+
+    if "Ironclad" in card_character[card]:
+        card_rows_Ironclad.append(
+            {
+                "card_name": card,
+                "times_offered": offered,
+                "times_picked": picked,
+                "pick_rate": pick_rate,
+                "wins_when_picked": wins,
+                "win_rate_when_picked": win_rate,
+            }
+        )
+
+    if "Defect" in card_character[card]:
+        card_rows_Defect.append(
+            {
+                "card_name": card,
+                "times_offered": offered,
+                "times_picked": picked,
+                "pick_rate": pick_rate,
+                "wins_when_picked": wins,
+                "win_rate_when_picked": win_rate,
+            }
+        )
+
 cards_df = pd.DataFrame(card_rows)
+cards_df_Silent = pd.DataFrame(card_rows_Silent)
+cards_df_Regent = pd.DataFrame(card_rows_Regent)
+cards_df_Necrobinder = pd.DataFrame(card_rows_Necrobinder)
+cards_df_Ironclad = pd.DataFrame(card_rows_Ironclad)
+cards_df_Defect = pd.DataFrame(card_rows_Defect)
 
-cards_df = cards_df.sort_values(by="pick_rate", ascending=False)
+cards_df_Silent = cards_df_Silent.sort_values(
+    by="win_rate_when_picked", ascending=False
+)
+cards_df_Regent = cards_df_Regent.sort_values(
+    by="win_rate_when_picked", ascending=False
+)
+cards_df_Necrobinder = cards_df_Necrobinder.sort_values(
+    by="win_rate_when_picked", ascending=False
+)
+cards_df_Ironclad = cards_df_Ironclad.sort_values(
+    by="win_rate_when_picked", ascending=False
+)
+cards_df_Defect = cards_df_Defect.sort_values(
+    by="win_rate_when_picked", ascending=False
+)
 
+cards_df_Silent.to_csv("Silent_deck.csv", index=False)
+cards_df_Regent.to_csv("Regent_deck.csv", index=False)
+cards_df_Necrobinder.to_csv("Necrobinder_deck.csv", index=False)
+cards_df_Ironclad.to_csv("Ironclad_deck.csv", index=False)
+cards_df_Defect.to_csv("Defect_deck.csv", index=False)
 cards_df.to_csv("deck.csv", index=False)
 
 # ================================
