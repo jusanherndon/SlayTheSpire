@@ -14,6 +14,8 @@ The script will also run some basic data analysis on those DataFrames:
   - An interactive plot showing card pick rates plotted against win rates
 
 
+  [Slay the Spire 2 database](https://slaythespire2.gg)
+
 # Quickstart
 
 0. (optional) setup python virtual environment
